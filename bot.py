@@ -1,23 +1,17 @@
 import os
 import telebot
 import requests
-from threading import Thread
-from flask import Flask
+import streamlit as st
 
-# Render အတွက် Web Server တည်ဆောက်ခြင်း (Port Timeout ကျော်ရန်)
-app = Flask('')
+# Streamlit UI အခြေခံ ပြသခြင်း (ဆာဗာ Live ဖြစ်နေစေရန်)
+st.title("🤖 TikTok Downloader Bot")
+st.write("ဒီ Web App သည် Telegram Bot ကို ဆာဗာပေါ်တွင် 24/7 Run ပေးထားရန် ဖြစ်ပါသည်။")
+st.success("Bot အခြေအနေ: အလုပ်လုပ်နေပါသည် (Running...)")
 
-@app.route('/')
-def home():
-    return "Bot is running 24/7!"
-
-def run_web_server():
-    # Render က ပေးမည့် Port သို့မဟုတ် 8080 ကို သုံးမည်
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-# Token နှင့် Channel သတ်မှတ်ချက်များ
+# Token ကို Streamlit ရဲ့ Secrets (Environment Variable) ကနေ ဖတ်မည်
 API_TOKEN = os.environ.get('BOT_TOKEN')
+
+# Channel အချက်အလက်များ
 CHANNEL_ID = '@Learning_DG' 
 CHANNEL_LINK = 'https://t.me/Learning_DG' 
 
@@ -92,11 +86,7 @@ def handle_message(message):
     else:
         bot.reply_to(message, "⚠️ ကျေးဇူးပြု၍ မှန်ကန်သော TikTok ဗီဒီယို Link ကိုသာ ပို့ပေးပါ။")
 
-# Web Server နှင့် Bot ကို Background တွင် တစ်ပြိုင်နက် Run ခြင်း
+# Bot ကို စတင်ပတ်ပြေးခြင်း
 if __name__ == "__main__":
-    t = Thread(target=run_web_server)
-    t.start()
-    
-    print("Bot စတင် အလုပ်လုပ်နေပါပြီ...")
     bot.infinity_polling()
 
