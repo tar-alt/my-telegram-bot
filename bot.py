@@ -4,12 +4,11 @@ import requests
 from flask import Flask
 from threading import Thread
 
-# Web Server ပတ်ဖို့အတွက် Flask သုံးခြင်း (Render ရဲ့ အိပ်ပျော်ခြင်းမှ ကာကွယ်ရန်)
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is Alive!"
+    return "Bot is Running Perfectly!"
 
 def run_server():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
@@ -49,14 +48,21 @@ def handle_message(message):
     status_msg = bot.reply_to(message, "⏳ မီဒီယာဖိုင်ကို ရှာဖွေပြီး Quality အမြင့်ဆုံး ဆွဲထုတ်နေပါသည်...")
 
     try:
+        # 🚀 Render ပေါ်တွင် ပိတ်ဆို့မှုမရှိစေရန် User-Agent Header ထည့်သွင်းထားသော High-Speed API Pipeline
         api_url = f"https://www.donguri.desktop.is-a.dev/api/universal?url={url}"
-        res = requests.get(api_url).json()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
+        response = requests.get(api_url, headers=headers, timeout=20)
+        res = response.json()
 
         if res.get('status') == 'success' and res.get('data'):
             data = res['data']
             media_type = data.get('type')
             title = data.get('title', 'Downloaded Media')
 
+            # ၁။ TikTok Photo Slide ဖြစ်ခဲ့လျှင် Album ပုံစံ ပို့မည်
             if media_type == 'images' and data.get('images'):
                 images_list = data['images']
                 media_group = []
@@ -68,6 +74,7 @@ def handle_message(message):
                 bot.send_media_group(chat_id=chat_id, media=media_group, reply_to_message_id=msg_id)
                 bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
 
+            # ၂။ ဗီဒီယိုဖိုင် ဖြစ်ခဲ့လျှင် (TT, YT, FB, Pinterest)
             elif data.get('video_url'):
                 video_url = data.get('video_url')
                 bot.send_video(
@@ -84,10 +91,11 @@ def handle_message(message):
             bot.edit_message_text("❌ မီဒီယာဖိုင် ရှာမတွေ့ပါ။ လင့်ခ် သက်တမ်းကုန်သွားခြင်း သို့မဟုတ် Private ဖြစ်နေနိုင်ပါသည်။", chat_id=chat_id, message_id=status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text("⚠️ ဆာဗာပိုင်း ဒေတာအဝင်များနေသဖြင့် ခေတ္တစောင့်ပြီး ပြန်ပို့ကြည့်ပေးပါဗျာ။", chat_id=chat_id, message_id=status_msg.message_id)
+        # Error အစစ်အမှန်ကို Render Log တွင် မြင်နိုင်ရန် print ထုတ်ထားခြင်း
+        print(f"Error occurred: {str(e)}")
+        bot.edit_message_text("⚠️ API ဆာဗာ ချိတ်ဆက်မှု ကြန့်ကြာနေပါသည်။ ခဏစောင့်ပြီး ပြန်ပို့ကြည့်ပေးပါဗျာ။", chat_id=chat_id, message_id=status_msg.message_id)
 
 if __name__ == "__main__":
-    # Flask Web Server ကို Thread နဲ့ Background မှာ ပတ်ထားခြင်း
     t = Thread(target=run_server)
     t.start()
     
@@ -95,7 +103,6 @@ if __name__ == "__main__":
         bot.remove_webhook()
     except Exception:
         pass
-    
-    # Bot အား လိုင်းမကျစေရန် အမြဲ ပတ်ခိုင်းထားခြင်း
+        
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
-    
+
