@@ -1,93 +1,101 @@
 import os
 import telebot
 import requests
-import streamlit as st
+from flask import Flask
+from threading import Thread
 
-# Streamlit UI အခြေခံ ပြသခြင်း (ဆာဗာ Live ဖြစ်နေစေရန်)
-st.title("🤖 TikTok Downloader Bot")
-st.write("ဒီ Web App သည် Telegram Bot ကို ဆာဗာပေါ်တွင် 24/7 Run ပေးထားရန် ဖြစ်ပါသည်။")
-st.success("Bot အခြေအနေ: အလုပ်လုပ်နေပါသည် (Running...)")
+# Web Server ပတ်ဖို့အတွက် Flask သုံးခြင်း (Render ရဲ့ အိပ်ပျော်ခြင်းမှ ကာကွယ်ရန်)
+app = Flask('')
 
-# Token ကို Streamlit ရဲ့ Secrets (Environment Variable) ကနေ ဖတ်မည်
-API_TOKEN = '8844212750:AAGy_msgUAMhs_Yjp-PrpefGUaCTbsLWkxI'
+@app.route('/')
+def home():
+    return "Bot is Alive!"
 
+def run_server():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
-# Channel အချက်အလက်များ
-CHANNEL_ID = '@Learning_DG' 
-CHANNEL_LINK = 'https://t.me/Learning_DG' 
-
+# ✅ Taro ရဲ့ Bot Token အသစ်စက်စက်
+API_TOKEN = '8764251572:AAE18imddZBhpwzJ7zoDKX4ol9uB91eTubQ'
 bot = telebot.TeleBot(API_TOKEN)
 
-def is_subscribed(user_id):
-    try:
-        member = bot.get_chat_member(CHANNEL_ID, user_id)
-        if member.status in ['creator', 'administrator', 'member']:
-            return True
-        return False
-    except Exception as e:
-        print(f"Error checking sub: {e}")
-        return True
-
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    user_id = message.from_user.id
-    if is_subscribed(user_id):
-        bot.reply_to(message, "👋 မင်္ဂလာပါဗျာ။ ကျွန်တော့်ဆီကို ဒေါင်းလုဒ်ဆွဲချင်တဲ့ TikTok Link ပို့ပေးနိုင်ပါပြီ။ HD Quality အပြည့်ဖြင့် ဒေါင်းလုပ်ဆွဲပေးပါမည်။")
-    else:
-        markup = telebot.types.InlineKeyboardMarkup()
-        btn_join = telebot.types.InlineKeyboardButton(text="📢 Channel သို့ဝင်ရန်", url=CHANNEL_LINK)
-        btn_check = telebot.types.InlineKeyboardButton(text="🔄 ဝင်ပြီးပါပြီ (Check)", callback_data="check_sub")
-        markup.add(btn_join)
-        markup.add(btn_check)
-        bot.send_message(message.chat.id, "❌ အောက်က Channel ကို အရင် Join ပေးမှ Bot ကို သုံးလို့ရပါမယ်ဗျာ။", reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
-def callback_check(call):
-    user_id = call.from_user.id
-    if is_subscribed(user_id):
-        bot.answer_callback_query(call.id, "ကျေးဇူးတင်ပါတယ်! ယခု အသုံးပြုနိုင်ပါပြီ။")
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="✅ အောင်မြင်ပါသည်။ TikTok Link ပို့ပေးနိုင်ပါပြီ။")
-    else:
-        bot.answer_callback_query(call.id, "❌ Channel မဝင်ရသေးပါဘူးဗျာ။ အရင်ဝင်ပေးပါ။", show_alert=True)
+    welcome_text = (
+        "👋 မင်္ဂလာပါဗျာ။ ကျွန်တော်က All-in-One Downloader Bot ပါ။\n\n"
+        "📥 အောက်ပါလင့်ခ်များကို ပို့ရုံဖြင့် တိုက်ရိုက်ဒေါင်းလုဒ်ဆွဲပေးနိုင်ပါသည် -\n"
+        "• **TikTok** (Videos & Photo Slides)\n"
+        "• **YouTube** (Shorts & Videos)\n"
+        "• **Facebook** (Videos & Reels)\n"
+        "• **Pinterest** (Videos)\n\n"
+        "⚡ ကြော်ငြာမပါ၊ လူတိုင်းလွတ်လပ်စွာ အသုံးပြုနိုင်ပါသည်ဗျာ။"
+    )
+    bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    user_id = message.from_user.id
     url = message.text
+    chat_id = message.chat.id
+    msg_id = message.message_id
 
-    if not is_subscribed(user_id):
-        markup = telebot.types.InlineKeyboardMarkup()
-        btn_join = telebot.types.InlineKeyboardButton(text="📢 Channel သို့ဝင်ရန်", url=CHANNEL_LINK)
-        markup.add(btn_join)
-        bot.reply_to(message, "❌ ဗီဒီယိုဒေါင်းရန် အောက်က Channel ကို အရင် Join ပေးပါ။", reply_markup=markup)
+    is_tiktok = "tiktok.com" in url
+    is_youtube = "youtube.com" in url or "youtu.be" in url
+    is_facebook = "facebook.com" in url or "fb.watch" in url or "fb.gg" in url
+    is_pinterest = "pinterest.com" in url or "pin.it" in url
+
+    if not (is_tiktok or is_youtube or is_facebook or is_pinterest):
+        bot.reply_to(message, "⚠️ ကျေးဇူးပြု၍ မှန်ကန်သော TikTok, YouTube, Facebook သို့မဟုတ် Pinterest လင့်ခ်ကို ပို့ပေးပါ။")
         return
 
-    if "tiktok.com" in url:
-        status_msg = bot.reply_to(message, "⏳ TikTok ဗီဒီယိုကို HD Quality ဖြင့် ရှာဖွေနေပါသည်၊ ခေတ္တစောင့်ဆိုင်းပေးပါ...")
-        try:
-            api_url = f"https://tikwm.com/api/?url={url}"
-            response = requests.get(api_url).json()
-            if response.get('code') == 0:
-                data = response['data']
-                video_url = data.get('hdplay') if data.get('hdplay') else data.get('play')
-                video_title = data.get('title', 'TikTok Video')
-                
+    status_msg = bot.reply_to(message, "⏳ မီဒီယာဖိုင်ကို ရှာဖွေပြီး Quality အမြင့်ဆုံး ဆွဲထုတ်နေပါသည်...")
+
+    try:
+        api_url = f"https://www.donguri.desktop.is-a.dev/api/universal?url={url}"
+        res = requests.get(api_url).json()
+
+        if res.get('status') == 'success' and res.get('data'):
+            data = res['data']
+            media_type = data.get('type')
+            title = data.get('title', 'Downloaded Media')
+
+            if media_type == 'images' and data.get('images'):
+                images_list = data['images']
+                media_group = []
+                for i, img_url in enumerate(images_list):
+                    if i == 0:
+                        media_group.append(telebot.types.InputMediaPhoto(img_url, caption=f"📸 **{title}**\n\n👤 Created by: Taro", parse_mode="Markdown"))
+                    else:
+                        media_group.append(telebot.types.InputMediaPhoto(img_url))
+                bot.send_media_group(chat_id=chat_id, media=media_group, reply_to_message_id=msg_id)
+                bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
+
+            elif data.get('video_url'):
+                video_url = data.get('video_url')
                 bot.send_video(
-                    chat_id=message.chat.id, 
-                    video=video_url, 
-                    caption=f"🎬 {video_title}\n\n✨ Created by: Taro",
-                    reply_to_message_id=message.message_id
+                    chat_id=chat_id,
+                    video=video_url,
+                    caption=f"🎬 **{title}**\n\n✨ **Quality:** Ultra HD Optimized\n\n👤 Created by: Taro",
+                    reply_to_message_id=msg_id,
+                    parse_mode="Markdown"
                 )
-                bot.delete_message(chat_id=message.chat.id, message_id=status_msg.message_id)
+                bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
             else:
-                bot.edit_message_text(chat_id=message.chat.id, message_id=status_msg.message_id, text="❌ ဗီဒီယိုကို ရှာမတွေ့ပါ။ လင့်ခ် မှန်ကန်မှု ရှိမရှိ ပြန်စစ်ပေးပါ။")
-        except Exception as e:
-            print(f"Error downloading: {e}")
-            bot.edit_message_text(chat_id=message.chat.id, message_id=status_msg.message_id, text="⚠️ ဆာဗာပိုင်း အနည်းငယ် အလုပ်များနေသဖြင့် နောက်တစ်ကြိမ် ပြန်လည် စမ်းသပ်ပေးပါရန်။")
-    else:
-        bot.reply_to(message, "⚠️ ကျေးဇူးပြု၍ မှန်ကန်သော TikTok ဗီဒီယို Link ကိုသာ ပို့ပေးပါ။")
+                bot.edit_message_text("❌ မီဒီယာဖိုင် ဆွဲထုတ်၍မရပါ။ လင့်ခ်မှန်ကန်ကြောင်း ပြန်စစ်ပေးပါ။", chat_id=chat_id, message_id=status_msg.message_id)
+        else:
+            bot.edit_message_text("❌ မီဒီယာဖိုင် ရှာမတွေ့ပါ။ လင့်ခ် သက်တမ်းကုန်သွားခြင်း သို့မဟုတ် Private ဖြစ်နေနိုင်ပါသည်။", chat_id=chat_id, message_id=status_msg.message_id)
 
-# Bot ကို စတင်ပတ်ပြေးခြင်း
+    except Exception as e:
+        bot.edit_message_text("⚠️ ဆာဗာပိုင်း ဒေတာအဝင်များနေသဖြင့် ခေတ္တစောင့်ပြီး ပြန်ပို့ကြည့်ပေးပါဗျာ။", chat_id=chat_id, message_id=status_msg.message_id)
+
 if __name__ == "__main__":
-    bot.infinity_polling()
-
+    # Flask Web Server ကို Thread နဲ့ Background မှာ ပတ်ထားခြင်း
+    t = Thread(target=run_server)
+    t.start()
+    
+    try:
+        bot.remove_webhook()
+    except Exception:
+        pass
+    
+    # Bot အား လိုင်းမကျစေရန် အမြဲ ပတ်ခိုင်းထားခြင်း
+    bot.infinity_polling(timeout=60, long_polling_timeout=60)
+    
