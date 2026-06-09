@@ -1,14 +1,15 @@
 import os
 import telebot
-import requests
 from flask import Flask
 from threading import Thread
+import subprocess
+import json
 
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is Running Perfectly!"
+    return "Bot is Running Independently!"
 
 def run_server():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
@@ -26,7 +27,7 @@ def send_welcome(message):
         "• **YouTube** (Shorts & Videos)\n"
         "• **Facebook** (Videos & Reels)\n"
         "• **Pinterest** (Videos)\n\n"
-        "⚡ ကြော်ငြာမပါ၊ လူတိုင်းလွတ်လပ်စွာ အသုံးပြုနိုင်ပါသည်ဗျာ။"
+        "⚡ ကြော်ငြာမပါ၊ ကိုယ်ပိုင် Engine ဖြင့် တိုက်ရိုက်ဒေါင်းပေးပါသည်ဗျာ။"
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
@@ -36,64 +37,64 @@ def handle_message(message):
     chat_id = message.chat.id
     msg_id = message.message_id
 
-    is_tiktok = "tiktok.com" in url
-    is_youtube = "youtube.com" in url or "youtu.be" in url
-    is_facebook = "facebook.com" in url or "fb.watch" in url or "fb.gg" in url
-    is_pinterest = "pinterest.com" in url or "pin.it" in url
-
-    if not (is_tiktok or is_youtube or is_facebook or is_pinterest):
+    # လင့်ခ် စစ်ဆေးခြင်း
+    if not any(domain in url for domain in ["tiktok.com", "youtube.com", "youtu.be", "facebook.com", "fb.watch", "fb.gg", "pinterest.com", "pin.it"]):
         bot.reply_to(message, "⚠️ ကျေးဇူးပြု၍ မှန်ကန်သော TikTok, YouTube, Facebook သို့မဟုတ် Pinterest လင့်ခ်ကို ပို့ပေးပါ။")
         return
 
-    status_msg = bot.reply_to(message, "⏳ မီဒီယာဖိုင်ကို ရှာဖွေပြီး Quality အမြင့်ဆုံး ဆွဲထုတ်နေပါသည်...")
+    status_msg = bot.reply_to(message, "⏳ မီဒီယာဖိုင်ကို ကိုယ်ပိုင် Engine ဖြင့် စစ်ဆေးပြီး အမြင့်ဆုံး Quality ဆွဲထုတ်နေပါသည်...")
 
     try:
-        # 🚀 Render ပေါ်တွင် ပိတ်ဆို့မှုမရှိစေရန် User-Agent Header ထည့်သွင်းထားသော High-Speed API Pipeline
-        api_url = f"https://www.donguri.desktop.is-a.dev/api/universal?url={url}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
+        # yt-dlp သုံးပြီး မီဒီယာအချက်အလက်များကို ဆွဲထုတ်ခြင်း
+        cmd = ["yt-dlp", "-j", url]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        meta = json.loads(result.stdout)
         
-        response = requests.get(api_url, headers=headers, timeout=20)
-        res = response.json()
-
-        if res.get('status') == 'success' and res.get('data'):
-            data = res['data']
-            media_type = data.get('type')
-            title = data.get('title', 'Downloaded Media')
-
-            # ၁။ TikTok Photo Slide ဖြစ်ခဲ့လျှင် Album ပုံစံ ပို့မည်
-            if media_type == 'images' and data.get('images'):
-                images_list = data['images']
-                media_group = []
-                for i, img_url in enumerate(images_list):
-                    if i == 0:
-                        media_group.append(telebot.types.InputMediaPhoto(img_url, caption=f"📸 **{title}**\n\n👤 Created by: Taro", parse_mode="Markdown"))
-                    else:
-                        media_group.append(telebot.types.InputMediaPhoto(img_url))
+        title = meta.get("title", "Multi-Media Downloader")
+        
+        # ၁။ TikTok Photo Slide ဖြစ်နေလျှင် (Entries သို့မဟုတ် Images ပါဝင်မှုကို စစ်ဆေးခြင်း)
+        if "entries" in meta or (meta.get("extractor") == "TikTok" and not meta.get("video_url") and meta.get("formats") == None):
+            bot.edit_message_text("📸 ဓာတ်ပုံ Slide များအား ဖတ်ရှုနေပါသည်...", chat_id=chat_id, message_id=status_msg.message_id)
+            # ဓာတ်ပုံများအတွက် သီးသန့်ပြန်ထုတ်ယူခြင်း
+            cmd_img = ["yt-dlp", "--flat-playlist", "--dump-json", url]
+            img_res = subprocess.run(cmd_img, capture_output=True, text=True).stdout
+            
+            media_group = []
+            for line in img_res.splitlines():
+                if line.strip():
+                    img_meta = json.loads(line)
+                    if img_meta.get("url"):
+                        if len(media_group) == 0:
+                            media_group.append(telebot.types.InputMediaPhoto(img_meta["url"], caption=f"📸 **{title}**\n\n👤 Created by: Taro", parse_mode="Markdown"))
+                        else:
+                            media_group.append(telebot.types.InputMediaPhoto(img_meta["url"]))
+            
+            if media_group:
                 bot.send_media_group(chat_id=chat_id, media=media_group, reply_to_message_id=msg_id)
                 bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
+                return
 
-            # ၂။ ဗီဒီယိုဖိုင် ဖြစ်ခဲ့လျှင် (TT, YT, FB, Pinterest)
-            elif data.get('video_url'):
-                video_url = data.get('video_url')
-                bot.send_video(
-                    chat_id=chat_id,
-                    video=video_url,
-                    caption=f"🎬 **{title}**\n\n✨ **Quality:** Ultra HD Optimized\n\n👤 Created by: Taro",
-                    reply_to_message_id=msg_id,
-                    parse_mode="Markdown"
-                )
-                bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
-            else:
-                bot.edit_message_text("❌ မီဒီယာဖိုင် ဆွဲထုတ်၍မရပါ။ လင့်ခ်မှန်ကန်ကြောင်း ပြန်စစ်ပေးပါ။", chat_id=chat_id, message_id=status_msg.message_id)
+        # ၂။ ဗီဒီယိုဖိုင်ဖြစ်လျှင် (တိုက်ရိုက် ဗီဒီယိုလင့်ခ်ကို ရယူခြင်း)
+        video_url = meta.get("url")
+        if not video_url and meta.get("formats"):
+            # အကောင်းဆုံး Quality ဗီဒီယိုလင့်ခ်ကို ရွေးထုတ်ခြင်း
+            video_url = meta["formats"][-1].get("url")
+
+        if video_url:
+            bot.send_video(
+                chat_id=chat_id,
+                video=video_url,
+                caption=f"🎬 **{title}**\n\n✨ **Quality:** High Definition\n\n👤 Created by: Taro",
+                reply_to_message_id=msg_id,
+                parse_mode="Markdown"
+            )
+            bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
         else:
-            bot.edit_message_text("❌ မီဒီယာဖိုင် ရှာမတွေ့ပါ။ လင့်ခ် သက်တမ်းကုန်သွားခြင်း သို့မဟုတ် Private ဖြစ်နေနိုင်ပါသည်။", chat_id=chat_id, message_id=status_msg.message_id)
+            bot.edit_message_text("❌ ဗီဒီယိုလင့်ခ်ကို ဆွဲထုတ်၍မရပါ။ လင့်ခ်မှန်ကန်ကြောင်း ပြန်စစ်ပေးပါ။", chat_id=chat_id, message_id=status_msg.message_id)
 
     except Exception as e:
-        # Error အစစ်အမှန်ကို Render Log တွင် မြင်နိုင်ရန် print ထုတ်ထားခြင်း
-        print(f"Error occurred: {str(e)}")
-        bot.edit_message_text("⚠️ API ဆာဗာ ချိတ်ဆက်မှု ကြန့်ကြာနေပါသည်။ ခဏစောင့်ပြီး ပြန်ပို့ကြည့်ပေးပါဗျာ။", chat_id=chat_id, message_id=status_msg.message_id)
+        print(f"Error: {str(e)}")
+        bot.edit_message_text("❌ ဒီလင့်ခ်မှ ဗီဒီယိုကို ဆွဲထုတ်ရန် ဆာဗာတွင် ကန့်သတ်ချက်ရှိနေပါသည်။ တခြားလင့်ခ်ဖြင့် ပြန်စမ်းကြည့်ပေးပါဗျာ။", chat_id=chat_id, message_id=status_msg.message_id)
 
 if __name__ == "__main__":
     t = Thread(target=run_server)
@@ -105,4 +106,4 @@ if __name__ == "__main__":
         pass
         
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
-
+    
